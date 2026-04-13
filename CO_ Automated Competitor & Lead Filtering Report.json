@@ -1,0 +1,592 @@
+{
+  "name": "CO: Automated Competitor & Lead Filtering Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        -272
+      ],
+      "id": "20aece2c-4844-42ca-840a-298e3ad845db",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "engine",
+              "value": "google_jobs"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "hl",
+              "value": "en"
+            },
+            {
+              "name": "gl",
+              "value": "hk"
+            },
+            {
+              "name": "api_key",
+              "value": "9e2dcabf8fd595e1e3962fd7fe49faf685e5a631207bf608b501c333f51429e8"
+            },
+            {
+              "name": "chips",
+              "value": "date_posted:month"
+            },
+            {
+              "name": "location",
+              "value": "Hong Kong"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        -272
+      ],
+      "id": "75f350fb-c060-4d60-a1be-5024cf47476e",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "jobs_results ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -272
+      ],
+      "id": "0c138092-dc6f-438e-8ffb-e42295bdb0f9",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "08409c1d-1c32-4df2-8f21-661ebcbb0c04",
+              "leftValue": "={{ $json.job_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        -272
+      ],
+      "id": "a3181a34-027f-4c3a-8f31-9b5214d7e8a2",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "tableName": "ScrapedJobs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "=job_id",
+              "fieldValue": "={{ $('Split Out').item.json.job_id }}"
+            },
+            {
+              "fieldId": "company_name",
+              "fieldValue": "={{ $('Split Out').item.json.company_name }}"
+            },
+            {
+              "fieldId": "title",
+              "fieldValue": "={{ $('Split Out').item.json.company_name }}"
+            },
+            {
+              "fieldId": "url",
+              "fieldValue": "={{ $('Split Out').item.json.source_link }}"
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.awsDynamoDb",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        -288
+      ],
+      "id": "44f7efcd-86cb-4ead-9c92-57506992b45c",
+      "name": "Create or update an item",
+      "retryOnFail": false,
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "notesInFlow": false,
+      "credentials": {
+        "aws": {
+          "id": "uD63eLbjjNOocDX7",
+          "name": "AWS (IAM) account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Company: {{ $json.company_name }}\nTitle: {{ $json.title }}\nURL: {{ $json.url }}\nDescription {{ $('Split Out').item.json.description }}\n\nAnalyze if this is a target healthcare job posting.\n",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "HK healthcare job analyst. Output ONLY valid JSON:\n\n{\n\"is_target\":true,\n\"reason\":\"1 sentence analysis\", \n\"company_name\":\"exact name\",\n\"title\":\"exact title\",\n\"url\":\"exact url\",\n}\n\nTARGETS: Nurse(RN/EN), PCW/HW, PT/Physio, OT, ST/Speech, Nutritionist, Social Worker\nEXCLUDE: Doctor, Dentist, Admin/Clerk/IT, OR if company_name contains competitors (e.g., \"Competitor A\", \"Competitor B\")\n\nCopy input fields exactly. JSON only."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        96,
+        112
+      ],
+      "id": "778f39f0-8c97-482e-a5f1-a87bd203f831",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "amazon.nova-lite-v1:0",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAwsBedrock",
+      "typeVersion": 1.1,
+      "position": [
+        96,
+        256
+      ],
+      "id": "132ac8b7-f6e3-41e4-9131-ed50029c81e8",
+      "name": "AWS Bedrock Chat Model",
+      "credentials": {
+        "aws": {
+          "id": "6DtrFOzdINFk0KoX",
+          "name": "AWS (IAM) account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n\n\"is_target\": true,\n\n\"reason\": \"the reason for AI\",\n\n\"company_name\": \"company name here\",\n\n\"title\": \"job title here\",\n\n\"url\": \"job opening link here \"\n\n}\n  \n",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        192,
+        288
+      ],
+      "id": "a7b5d28c-b841-42ff-bc2e-956919c578f7",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "model": "amazon.nova-lite-v1:0",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAwsBedrock",
+      "typeVersion": 1.1,
+      "position": [
+        192,
+        432
+      ],
+      "id": "a2b63b90-d460-4c6d-9e78-596a143bc775",
+      "name": "AWS Bedrock Chat Model1",
+      "credentials": {
+        "aws": {
+          "id": "6DtrFOzdINFk0KoX",
+          "name": "AWS (IAM) account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "job_list",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        848,
+        96
+      ],
+      "id": "3526b399-764b-4e2c-854c-e8fb409013e6",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the aggregated array of jobs\n// Make sure \"job_list\" matches the \"Destination Field Name\" in your Aggregate node\nconst jobs = $input.item.json.job_list || [];\n\n// Prepare the HTML structure for the email header\nlet email_html = `\n  <div style=\"font-family: Arial, sans-serif; line-height: 1.6; color: #333;\">\n    <h2 style=\"color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px;\">\n      🏥 Daily Healthcare Leads Report\n    </h2>\n    <p>\n      Good morning! The system has found <b>${jobs.length}</b> new potential leads in the last 24 hours.\n      Competitors and Medical Doctors have been automatically filtered out.\n    </p>\n    <hr style=\"border: 0; border-top: 1px solid #eee; margin: 20px 0;\">\n`;\n\n// Loop through each job and format it as an individual block\nfor (let i = 0; i < jobs.length; i++) {\n    const job = jobs[i];\n\n    // Create a clickable link if the URL exists\n    const job_link = job.url\n        ? `<a href=\"${job.url}\" target=\"_blank\" style=\"color: #3498db; text-decoration: none;\">Click here to view job posting</a>`\n        : 'Link not provided';\n\n    email_html += `\n    <div style=\"margin-bottom: 25px; padding: 15px; background-color: #f9f9f9; border-radius: 8px; border-left: 4px solid #3498db;\">\n        <h3 style=\"margin-top: 0; color: #2980b9;\">${i + 1}. ${job.title || 'Untitled Job'}</h3>\n        <ul style=\"list-style-type: none; padding-left: 0; margin-bottom: 0;\">\n            <li style=\"margin-bottom: 8px;\">🏢 <b>Hiring Company:</b> ${job.company_name || 'Not provided'}</li>\n            <li style=\"margin-bottom: 8px;\">🤖 <b>AI Reasoning:</b> ${job.reason || 'No reasoning provided'}</li>\n            <li style=\"margin-bottom: 0;\">🔗 <b>Job Link:</b> ${job_link}</li>\n        </ul>\n    </div>\n    `;\n}\n\n// Add the email footer\nemail_html += `\n    <hr style=\"border: 0; border-top: 1px solid #eee; margin: 20px 0;\">\n    <p style=\"font-size: 13px; color: #7f8c8d;\">\n      This report was automatically generated by n8n and AI.<br>\n      Please review the leads above and contact the suitable organizations via your Gmail Drafts or the provided links.\n    </p>\n  </div>\n`;\n\n// Output the final HTML string to the next node (Gmail)\nreturn {\n  json: {\n    email_html: email_html\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        96
+      ],
+      "id": "3a5c98e2-2675-48a5-8224-661729f464b3",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "65d9d137-b07a-4d1f-b293-d4bb3c3aed5f",
+              "leftValue": "={{ $json.output.is_target }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        432,
+        112
+      ],
+      "id": "062faf16-6b86-457c-969f-2037036c1603",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "609e43d5-3702-4b03-a6fc-c921b5e11f3d",
+              "name": "company_name",
+              "value": "={{ $json.output.company_name }}",
+              "type": "string"
+            },
+            {
+              "id": "55cb6bd4-28dd-4a3b-b477-3075a3100754",
+              "name": "title",
+              "value": "={{ $json.output.title }}",
+              "type": "string"
+            },
+            {
+              "id": "e4093c58-00e1-4ccd-8c65-99ca6a237182",
+              "name": "url",
+              "value": "={{ $json.output.url }}",
+              "type": "string"
+            },
+            {
+              "id": "dc957bba-59ce-441f-94e2-7cfa9c13aa6b",
+              "name": "reason",
+              "value": "={{ $json.output.reason }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        656,
+        96
+      ],
+      "id": "2897b508-71b7-4e00-b670-c28e2fcf030c",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "sendTo": "sintsun01@gmail.com",
+        "subject": "Daily Healthcare Leads Report",
+        "message": "={{ $json.email_html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1232,
+        96
+      ],
+      "id": "8347dffe-4961-4826-9034-74c91cfdcd44",
+      "name": "Send a message",
+      "webhookId": "51731735-1f42-40bf-82c4-4d937e44154a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "m0nn945au4JioQhG",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableName": "ScrapedJobs",
+        "keysUi": {
+          "keyValues": [
+            {
+              "key": "job_id",
+              "value": "={{ $json.job_id }}"
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.awsDynamoDb",
+      "typeVersion": 1,
+      "position": [
+        896,
+        -272
+      ],
+      "id": "bd78c7e1-138c-4a2f-a41a-f6887fd64df3",
+      "name": "Get an item",
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "executeOnce": false,
+      "credentials": {
+        "aws": {
+          "id": "uD63eLbjjNOocDX7",
+          "name": "AWS (IAM) account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const queries = [\n  '(\"Nurse\" OR \"RN\" OR \"EN\" OR \"Health Caregiver\")',\n  '(\"PCW\" OR \"Physical Therapist\" OR \"PT\" OR \"OT\")',\n  '(\"Speech Therapist\" OR \"Nutritionist\" OR \"Social Worker\" OR \"RSW\")'\n];\n\nconst allRequests = [];\n\nfor (const query of queries) {\n  for (const start of [0, 10]) {\n    allRequests.push({\n      json: {\n        query,\n        location: 'Hong Kong',\n        start,\n      },\n    });\n  }\n}\n\nreturn allRequests;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        -272
+      ],
+      "id": "b7b43743-ebb3-4a7c-b894-d8946186cec5",
+      "name": "Code in JavaScript1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Get an item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Create or update an item",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Create or update an item": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AWS Bedrock Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AWS Bedrock Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get an item": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "4483426a-b815-416d-97d0-94b3ad13e69d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "05793b1685478f704d9815e1d7299d76381929b72ba2bb52d5fea47830b354b8"
+  },
+  "id": "ymyc3sbU6PzCk1Yn",
+  "tags": []
+}
